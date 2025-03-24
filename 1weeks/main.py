@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 print("Hello Mars")
 
 log_file = "mission_computer_main.log"
@@ -36,7 +35,7 @@ except FileNotFoundError:
     print(f"파일 '{log_file}'을 찾을 수 없습니다")
 except Exception as e:
     print(f"오류 발생: {e}")
-=======
+    
 print("Hello Mars")
 
 log_file = "mission_computer_main.log"
@@ -74,4 +73,4 @@ except FileNotFoundError:
     print(f"파일 '{log_file}'을 찾을 수 없습니다")
 except Exception as e:
     print(f"오류 발생: {e}")
->>>>>>> a326963 (Initial commit)
+
