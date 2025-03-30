@@ -1,36 +1,52 @@
-import pandas as pd
-import pickle 
+def parse_flammability(value):
+    try:
+        return float(value)
+    except ValueError:
+        return -1  # 유효하지 않은 값은 최소값으로 처리
 
-file = "Mars_Base_Inventory_List.csv"
+def read_inventory_csv(file_path):
+    inventory = []
+    try:
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+            headers = lines[0].strip().split(',')
+            for line in lines[1:]:
+                values = line.strip().split(',')
+                item = dict(zip(headers, values))
+                inventory.append(item)
+    except Exception as e:
+        print(f"[오류] 파일 읽기 실패: {e}")
+    return inventory
 
-# Mars_Base_Inventory_List.csv 의 내용을 읽어 들어서 출력한다
-df = pd.read_csv(file)
-print(df)
+def save_to_csv(file_path, data):
+    try:
+        with open(file_path, 'w') as file:
+            if data:
+                headers = data[0].keys()
+                file.write(','.join(headers) + '\n')
+                for item in data:
+                    file.write(','.join(item.values()) + '\n')
+        print(f"[성공] 파일 저장 완료: {file_path}")
+    except Exception as e:
+        print(f"[오류] 파일 저장 실패: {e}")
 
-# Mars_Base_Inventory_List.csv 내용을 읽어서 Python의 리스트(List) 객체로 변환한다.  
-Inventory_List = df.to_dict(orient="records")
+# 실행 경로 설정
+input_file = 'C:\\Python\\2weeks\\Mars_Base_Inventory_List.csv'
+output_file = 'C:\\Python\\2weeks\\Mars_Base_Inventory_danger.csv'
 
-# 배열 내용을 적제 화물 목록을 인화성이 높은 순으로 정렬한다.
-sort_Inventory_List = sorted(Inventory_List, key=lambda x: float(x['Flammability']), reverse=True)
+# 1. CSV 읽기
+inventory = read_inventory_csv(input_file)
 
-# 인화성 지수가 0.7 이상되는 목록을 뽑아서 별도로 출력한다
-high_Inventory_List = [item for item in sort_Inventory_List if float(item['Flammability']) >= 0.7]
-print(high_Inventory_List )
+# 2. 인화성 기준 정렬 (내림차순)
+sorted_inventory = sorted(inventory, key=lambda x: parse_flammability(x['Flammability']), reverse=True)
 
-# 인화성 지수가 0.7 이상되는 목록을 CSV 포맷(Mars_Base_Inventory_danger.csv)으로 저장한다.
-high_df = pd.DataFrame(high_Inventory_List)
-high_df.to_csv("Mars_Base_Inventory_danger.csv", index=False)
+# 3. 인화성 ≥ 0.7인 항목 필터링
+dangerous_items = [item for item in sorted_inventory if parse_flammability(item['Flammability']) >= 0.7]
 
-# 인화성 순서로 정렬된 배열의 내용을 이진 파일형태로 저장한다. 파일이름은 Mars_Base_Inventory_List.bin
-with open("Mars_Base_Inventory_List.bin", "wb") as bin_file:
-    pickle.dump(sort_Inventory_List, bin_file)
-print("Mars_Base_Inventory_List.bin")
+# 4. 위험 목록 출력
+print("🔥 인화성 높은 적재 목록 (Flammability ≥ 0.7):")
+for item in dangerous_items:
+    print(f"- {item['Substance']} (Flammability: {item['Flammability']})")
 
-# 정렬 후 저장장
-with open("Mars_Base_Inventory_List.bin", "rb") as bin_file:
-    loaded_inventory = pickle.load(bin_file)
-
-# 저장된 Mars_Base_Inventory_List.bin 의 내용을 다시 읽어 들여서 화면에 내용을 출력한다.
-print(" 이진 파일 출력")
-for item in loaded_inventory:
-    print(item)
+# 5. CSV로 저장
+save_to_csv(output_file, dangerous_items)
