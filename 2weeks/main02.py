@@ -44,7 +44,7 @@ sorted_inventory = sorted(inventory, key=lambda x: parse_flammability(x['Flammab
 dangerous_items = [item for item in sorted_inventory if parse_flammability(item['Flammability']) >= 0.7]
 
 # 4. 위험 목록 출력
-print("🔥 인화성 높은 적재 목록 (Flammability ≥ 0.7):")
+print("인화성 높은 적재 목록 (Flammability ≥ 0.7):")
 for item in dangerous_items:
     print(f"- {item['Substance']} (Flammability: {item['Flammability']})")
 
