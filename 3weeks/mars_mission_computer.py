@@ -29,8 +29,9 @@ class DummySensor:
 
         return self.env_values
 
-# 인스턴스 생성 및 테스트
-ds = DummySensor()
-ds.set_env()
-env_data = ds.get_env()
-env_data
+if __name__ == "__main__":
+    # 인스턴스 생성 및 테스트
+    ds = DummySensor()
+    ds.set_env()
+    env_data = ds.get_env()
+    env_data
