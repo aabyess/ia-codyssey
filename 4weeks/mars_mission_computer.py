@@ -73,9 +73,10 @@ class MissionComputer:
         except Exception as e:
             print("에러 발생:",e)
 
-# RunComputer 인스턴스화
-RunComputer = MissionComputer()
 
-RunComputer.get_sensor_data()
+if __name__ == "__main__":
+    # RunComputer 인스턴스화
+    RunComputer = MissionComputer()
+    RunComputer.get_sensor_data()
 
 
