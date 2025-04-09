@@ -6,6 +6,9 @@ import threading #멀티스레드: 동시에 input 대기 + 무한 루프 실행
 sys.path.append(os.path.abspath('../3weeks'))
 # 경로 목록 sys.path에 '../3weeks'폴더를 강제로 추가
 # os.path.abspath('../3weeks')는 상대경로 -> 절대경로로 바꿔줌
+import platform
+import psutil  #  메모리 정보(단 시스템 정보를 가져오는 부분은 별도의 라이브러리를 사용 할 수 있다. )
+
 
 from dummy_sensor import DummySensor
 
@@ -73,10 +76,52 @@ class MissionComputer:
         except Exception as e:
             print("에러 발생:",e)
 
+        
+    @staticmethod
+    def get_mission_computer_info():
+        try:
+            info = {
+                "운영체제": platform.system(),
+                "운영체제 버전": platform.version(),
+                "CPU 종류": platform.processor(),
+                "CPU 코어 수": os.cpu_count(),
+                "메모리 크기(MB)": round(psutil.virtual_memory().total / (1024 ** 2), 2)
+            }
+            print("\n[미션 컴퓨터 시스템 정보]")
+            print(json.dumps(info, indent=2, ensure_ascii=False))
+        except Exception as e:
+            print(f"[시스템 정보 수집 오류] {e}")
+        with open("setting.txt", "a", encoding="utf-8") as f:
+            f.write("\n[미션 컴퓨터 시스템 정보]\n")
+            f.write(json.dumps(info, indent=2, ensure_ascii=False))
+            f.write("\n")
+
+    @staticmethod
+    def get_mission_computer_load():
+        try:
+            load = {
+                "CPU 실시간 사용량(%)": psutil.cpu_percent(interval=1),
+                "메모리 사용량(%)": psutil.virtual_memory().percent
+            }
+            print("\n[미션 컴퓨터 실시간 부하]")
+            print(json.dumps(load, indent=2, ensure_ascii=False))
+        except Exception as e:
+            print(f"[부하 정보 수집 오류] {e}")
+        with open("setting.txt", "a", encoding="utf-8") as f:
+            f.write("\n[미션 컴퓨터 실시간 부하]\n")
+            f.write(json.dumps(load, indent=2, ensure_ascii=False))
+            f.write("\n")
+
+
 
 if __name__ == "__main__":
     # RunComputer 인스턴스화
-    RunComputer = MissionComputer()
-    RunComputer.get_sensor_data()
+    runComputer = MissionComputer()
+    # 시스템 정보 출력
+    runComputer.get_mission_computer_info()
+    # 실시간 부하 출력
+    runComputer.get_mission_computer_load()
+    # 센서 출력 시작 지금은 필요없으니깐 주석처리
+    #runComputer.get_sensor_data()
 
 
