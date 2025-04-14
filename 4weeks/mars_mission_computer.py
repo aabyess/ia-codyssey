@@ -7,8 +7,7 @@ sys.path.append(os.path.abspath('../3weeks'))
 # 경로 목록 sys.path에 '../3weeks'폴더를 강제로 추가
 # os.path.abspath('../3weeks')는 상대경로 -> 절대경로로 바꿔줌
 import platform
-import psutil  #  메모리 정보(단 시스템 정보를 가져오는 부분은 별도의 라이브러리를 사용 할 수 있다. )
-
+import psutil  # psutil: 시스템 자원 정보를 얻을 수 있게 해주는 파이썬 라이브러리
 
 from dummy_sensor import DummySensor
 
@@ -81,14 +80,19 @@ class MissionComputer:
     def get_mission_computer_info():
         try:
             info = {
-                "운영체제": platform.system(),
-                "운영체제 버전": platform.version(),
-                "CPU 종류": platform.processor(),
-                "CPU 코어 수": os.cpu_count(),
-                "메모리 크기(MB)": round(psutil.virtual_memory().total / (1024 ** 2), 2)
+                "운영체제": platform.system(), # 운영체제 이름을 가져옴
+                "운영체제 버전": platform.version(), # OS의 버전 정보를 문자열로 가져옴
+                "CPU 종류": platform.processor(), # CPU 종류를 문자열로 가져옴
+                "CPU 코어 수": os.cpu_count(), # 시스템의 CPU 논리 코어 수를 가져옴
+                "메모리 크기(MB)": round(psutil.virtual_memory().total / (1024 ** 2), 2) # 총 메모리 용량 (단위: 바이트)
+                # 숫자가 너무 지저분해져서 보기 쉽게 할려고 
+                # total / (1024 ** 2) 는 바이트를 메가바이트(MB)로 변환
+                # 예)17089978368 바이트 → 16300.58 MB 로 변환
             }
             print("\n[미션 컴퓨터 시스템 정보]")
             print(json.dumps(info, indent=2, ensure_ascii=False))
+            # 'ensure_ascii=False' 비ASCII 문자(한글, 일본어 등)를 유니코드 이스케이프 시퀀스로 변환하지 말고, 
+            # 원래 문자 그대로 출력해줘라는 의미
         except Exception as e:
             print(f"[시스템 정보 수집 오류] {e}")
         with open("setting.txt", "a", encoding="utf-8") as f:
@@ -100,8 +104,9 @@ class MissionComputer:
     def get_mission_computer_load():
         try:
             load = {
-                "CPU 실시간 사용량(%)": psutil.cpu_percent(interval=1),
-                "메모리 사용량(%)": psutil.virtual_memory().percent
+                "CPU 실시간 사용량(%)": psutil.cpu_percent(interval=1),  #1초 동안 CPU 사용률을 측정한 후 퍼센트(%)로 반환
+                "메모리 사용량(%)": psutil.virtual_memory().percent      #시스템 메모리(RAM)의 전체 사용 상태 정보를 가져옴, 
+                                                                        #.percent: 그 중에서 사용 중인 메모리 비율만 퍼센트(%)로 가져옴
             }
             print("\n[미션 컴퓨터 실시간 부하]")
             print(json.dumps(load, indent=2, ensure_ascii=False))
@@ -109,7 +114,7 @@ class MissionComputer:
             print(f"[부하 정보 수집 오류] {e}")
         with open("setting.txt", "a", encoding="utf-8") as f:
             f.write("\n[미션 컴퓨터 실시간 부하]\n")
-            f.write(json.dumps(load, indent=2, ensure_ascii=False))
+            f.write(json.dumps(load, indent=2, ensure_ascii=False)) 
             f.write("\n")
 
 
