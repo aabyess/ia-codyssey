@@ -1,55 +1,117 @@
-import tkinter as tk
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QGridLayout, QPushButton, QLineEdit
+from PyQt5.QtCore import Qt
+import sys
 
-# 버튼 클릭 이벤트 처리
-def button_click(value):
-    current_text = entry.get()
-    entry.delete(0, tk.END)
-    entry.insert(0, current_text + value)
+class Calculator(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
 
-# tkinter 창 생성
-root = tk.Tk()
-root.title("iPhone Style Calculator")
-root.geometry("320x480")
-root.resizable(False, False)
+    def initUI(self):
+        self.setWindowTitle('iPhone Calculator')
+        self.setGeometry(100, 100, 320, 600)  # 전체 창 크기를 좀 더 높여줌
+        
+        # 전체 배경 색상을 검정색으로 설정
+        self.setStyleSheet("background-color: #000000;")  # 배경색을 검정색으로 설정
+        
+        # 디스플레이 화면 길이를 두 배로 길게 설정
+        self.display = QLineEdit(self)
+        self.display.setReadOnly(True)
+        self.display.setAlignment(Qt.AlignBottom | Qt.AlignRight)  # 숫자가 디스플레이 바닥에 붙도록 설정
+        self.display.setStyleSheet("""
+            font-size: 32px;
+            padding: 20px;
+            color: white;  /* 글자색을 흰색으로 설정 */
+            background-color: #000000;  /* 배경을 검정색으로 변경 */
+            border: none;
+        """)
+        self.display.setFixedHeight(160)  # 디스플레이 화면 길이를 두 배로 설정
 
-# 입력창
-entry = tk.Entry(root, font=("Arial", 28), justify="right", bd=10, insertwidth=2, bg="white", fg="black")
-entry.grid(row=0, column=0, columnspan=4, ipadx=8, ipady=15)
+        # 버튼 배치 (아이폰 계산기 UI와 정확하게 일치)
+        grid_layout = QGridLayout()
+        buttons = [
+            ('AC', 0, 0), ('±', 0, 1), ('%', 0, 2), ('÷', 0, 3),
+            ('7', 1, 0), ('8', 1, 1), ('9', 1, 2), ('×', 1, 3),
+            ('4', 2, 0), ('5', 2, 1), ('6', 2, 2), ('-', 2, 3),
+            ('1', 3, 0), ('2', 3, 1), ('3', 3, 2), ('+', 3, 3),
+            ('0', 4, 0, 2, 1), ('.', 4, 2), ('=', 4, 3),
+        ]
 
-# 버튼 레이아웃
-buttons = [
-    ["C", "+/-", "%", "÷"],
-    ["7", "8", "9", "×"],
-    ["4", "5", "6", "-"],
-    ["1", "2", "3", "+"],
-    ["0", ".", "="]
-]
+        for button in buttons:
+            text = button[0]
+            row = button[1]
+            col = button[2]
+            colspan = button[3] if len(button) > 3 else 1
+            rowspan = button[4] if len(button) > 4 else 1
 
-# 버튼 색상
-button_colors = {
-    "C": "orange", "+/-": "lightgray", "%": "lightgray", "÷": "orange",
-    "×": "orange", "-": "orange", "+": "orange", "=": "orange",
-    "0": "white", ".": "white", "1": "white", "2": "white", "3": "white",
-    "4": "white", "5": "white", "6": "white", "7": "white", "8": "white", "9": "white"
-}
+            button_widget = QPushButton(text, self)
+            button_widget.setFixedSize(80, 80)
+            
+            # 버튼을 원형으로 만들기 위한 설정
+            if text == '0':
+                # '0' 버튼은 두 칸을 차지하므로 타원형으로 만들어줍니다
+                button_widget.setStyleSheet("""
+                    background-color: #333333; 
+                    color: white; 
+                    font-size: 28px; 
+                    border-radius: 40px;
+                """)
+            else:
+                # 나머지 버튼들은 원형으로 설정
+                button_widget.setStyleSheet("""
+                    background-color: #333333; 
+                    color: white; 
+                    font-size: 28px; 
+                    border-radius: 40px;
+                """)
 
-# 버튼 생성
-for i, row in enumerate(buttons):
-    for j, btn_text in enumerate(row):
-        if btn_text == "0":
-            btn = tk.Button(root, text=btn_text, font=("Arial", 18), bg=button_colors[btn_text], fg="black",
-                            command=lambda value=btn_text: button_click(value))
-            btn.grid(row=i+1, column=j, columnspan=2, sticky="nsew", ipadx=50, ipady=20)
+            # 연산자 버튼의 스타일
+            if text in ['AC', '±', '%', '÷', '×', '-', '+', '=', '±']:
+                button_widget.setStyleSheet("""
+                    background-color: #FF9500; 
+                    color: white; 
+                    font-size: 28px; 
+                    border-radius: 40px;
+                """)
+
+            button_widget.clicked.connect(self.on_button_click)
+            grid_layout.addWidget(button_widget, row, col, rowspan, colspan)
+
+        # 레이아웃 설정
+        vbox = QVBoxLayout()
+        vbox.addWidget(self.display)
+        vbox.addLayout(grid_layout)
+        self.setLayout(vbox)
+
+    def on_button_click(self):
+        button_text = self.sender().text()
+        current_text = self.display.text()
+
+        if button_text == 'AC':
+            self.display.clear()
+        elif button_text == '±':
+            # ± 버튼을 눌렀을 때, 부호 변경 처리
+            if current_text:
+                if current_text[0] == '-':
+                    self.display.setText(current_text[1:])
+                else:
+                    self.display.setText('-' + current_text)
+        elif button_text == '=':
+            try:
+                # 계산 결과를 디스플레이에 출력
+                result = eval(current_text.replace('÷', '/').replace('×', '*').replace('±', '-'))
+                self.display.setText(str(result))
+            except Exception:
+                self.display.setText("Error")
         else:
-            btn = tk.Button(root, text=btn_text, font=("Arial", 18), bg=button_colors[btn_text], fg="black",
-                            command=lambda value=btn_text: button_click(value))
-            btn.grid(row=i+1, column=j, sticky="nsew", ipadx=20, ipady=20)
+            # 숫자나 연산자를 입력
+            self.display.setText(current_text + button_text)
 
-# 그리드 크기 조정
-for i in range(6):
-    root.grid_rowconfigure(i, weight=1)
-for j in range(4):
-    root.grid_columnconfigure(j, weight=1)
+def main():
+    app = QApplication(sys.argv)
+    calculator = Calculator()
+    calculator.show()
+    sys.exit(app.exec_())
 
-# 메인 루프 실행
-root.mainloop()
+if __name__ == '__main__':
+    main()
