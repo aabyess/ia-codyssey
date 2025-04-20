@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QGridLayout, QPushButton, QLineEdit
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt #PyQt 라이브러리
 import sys
 
 class Calculator(QWidget):
