@@ -27,7 +27,7 @@ class Calculator(QWidget):
         """)
         self.display.setFixedHeight(160)
 
-        # 버튼 레이아웃 설정
+        # 버튼 레이아웃 설정 및 버튼 목록 정의 (텍스트, 행, 열, [열 병합, 행 병합])
         grid_layout = QGridLayout()
         buttons = [
             ('AC', 0, 0), ('±', 0, 1), ('%', 0, 2), ('÷', 0, 3),
@@ -84,8 +84,8 @@ class Calculator(QWidget):
 
     # 버튼 클릭 시 호출되는 함수
     def on_button_click(self):
-        button_text = self.sender().text()
-        current_text = self.display.text()
+        button_text = self.sender().text()  # 클릭된 버튼의 텍스트
+        current_text = self.display.text()  # 현재 디스플레이 텍스트
 
         # 기능별 분기 처리
         if button_text == 'AC':
@@ -114,17 +114,17 @@ class Calculator(QWidget):
     def negative_positive(self):
         text = self.display.text()
         if text.startswith("-"):
-            self.display.setText(text[1:])
+            self.display.setText(text[1:])  # 음수 → 양수
         elif text:
-            self.display.setText("-" + text)
+            self.display.setText("-" + text)  # 양수 → 음수
 
-    # 백분율 계산
+    # 백분율 계산 (100으로 나누기)
     def percent(self):
         try:
             value = float(self.display.text())
             self.display.setText(str(value / 100))
         except:
-            self.display.setText("Error")
+            self.display.setText("Error")  # 숫자 변환 실패 시
 
     # 사칙연산 함수들
     def add(self, a, b):
@@ -141,10 +141,13 @@ class Calculator(QWidget):
             raise ZeroDivisionError("0으로 나눌 수 없습니다.")
         return a / b
 
-    # 수식 평가 및 출력 (eval 사용 제거하고 사칙연산 메서드 사용)
+    # 수식 평가 및 출력 (함수 대신 명시적으로 연산을 분리하고 처리하는 방식)
+    # 문자열 수식 → 실제 수식으로 변환
     def equal(self):
         try:
+            # 연산 기호를 Python 연산자로 변환
             expr = self.display.text().replace('÷', '/').replace('×', '*')
+            result = None
             for op in ['+', '-', '*', '/']:
                 if op in expr:
                     parts = expr.split(op)
@@ -159,13 +162,14 @@ class Calculator(QWidget):
                         elif op == '/':
                             result = self.divide(a, b)
                         break
+            # 소수점 6자리 이하 반올림
             if isinstance(result, float):
                 result = round(result, 6)
             self.display.setText(str(result))
         except ZeroDivisionError:
-            self.display.setText("Divide by 0 Error")
+            self.display.setText("Divide by 0 Error")  # 0으로 나누기 예외
         except:
-            self.display.setText("Error")
+            self.display.setText("Error")  # 일반 예외 처리
 
     # 디스플레이 길이에 따른 폰트 크기 자동 조절
     def adjust_font_size(self):
@@ -176,6 +180,7 @@ class Calculator(QWidget):
             font_size = 24
         else:
             font_size = 18
+        # 폰트 크기 조정
         self.display.setStyleSheet(f"""
             font-size: {font_size}px;
             padding: 20px;
@@ -194,8 +199,3 @@ def main():
 # 프로그램 진입점
 if __name__ == '__main__':
     main()
-
-
-#test
-
-#0509
