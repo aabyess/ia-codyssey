@@ -106,6 +106,7 @@ class Calculator(QWidget):
 
         self.adjust_font_size()  # 결과 길이에 따른 폰트 조정
 
+    # reset(), negative-positive(), percent() 메소드
     # 디스플레이 초기화
     def reset(self):
         self.display.setText("")
@@ -171,7 +172,7 @@ class Calculator(QWidget):
         except:
             self.display.setText("Error")  # 일반 예외 처리
 
-    # 디스플레이 길이에 따른 폰트 크기 자동 조절
+    #숫자 길이에 따른 폰트 크기 조절 
     def adjust_font_size(self):
         length = len(self.display.text())
         if length <= 10:
