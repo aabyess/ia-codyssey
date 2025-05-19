@@ -1,90 +1,97 @@
-import zipfile  # ZIP 파일을 다루기 위한 라이브러리
-import itertools  # 가능한 조합을 만드는 라이브러리
-import string  # 문자와 숫자 집합을 사용하기 위한 라이브러리
-import multiprocessing  # 여러 CPU 코어를 동시에 활용하기 위한 라이브러리
-import time  # 시간 측정용
-from datetime import datetime  # 날짜 및 시간을 보기 좋게 표현하기 위함
-import os  # 시스템 명령을 사용하기 위한 라이브러리
+import zipfile
+import itertools
+import string
+import multiprocessing
+import time
+from datetime import datetime
+import os
 
-# 압축 파일과 암호가 발견되면 결과를 저장할 파일 이름 지정
+# 압축 파일과 결과 저장 파일명
 ZIP_FILE = "emergency_storage_key.zip"
 OUTPUT_FILE = "password.txt"
 
-# 암호 조건 설정 (소문자 알파벳과 숫자, 총 6자리)
+# 문자 집합 및 암호 길이 설정
 CHARSET = string.ascii_lowercase + string.digits
 PASSWORD_LENGTH = 6
 
-# 내 컴퓨터의 CPU 코어 수를 확인해서 사용
+# 시스템 CPU 코어 수 확인
 PROCESS_COUNT = multiprocessing.cpu_count()
 
-# 시작 시간과 암호 시도 횟수를 기록하는 변수 설정
+# 시작 시간과 전체 시도 횟수를 저장할 공유 변수
 start_time = time.time()
 attempt_counter = multiprocessing.Value('i', 0)
 
-# 특정 문자로 시작하는 암호를 만들어서 ZIP 파일 압축 해제를 시도하는 알고리즘
-def try_passwords(start_char, counter):
+def try_passwords(start_chars, prefix, counter):
+    """
+    주어진 시작 문자들로 가능한 암호를 조합해 압축 해제를 시도함.
+    """
     try:
-        # 압축 파일 열기
         with zipfile.ZipFile(ZIP_FILE) as zf:
-            # start_char는 이미 앞에 있으니까, 나머지 5자리를 a~z + 0~9로 조합해서 만들어줌.
-            for pwd_tuple in itertools.product(CHARSET, repeat=PASSWORD_LENGTH - 1):
-                password = start_char + ''.join(pwd_tuple)
+            for start_char in start_chars:
+                for pwd_tuple in itertools.product(CHARSET, repeat=PASSWORD_LENGTH - len(prefix) - 1):
+                    password = prefix + start_char + ''.join(pwd_tuple)
 
-                # 전체 시도 횟수를 기록함. 여러 프로세스가 동시에 작업하니까 충돌 없이 처리하도록 get_lock()을 씀.
-                with counter.get_lock():
-                    counter.value += 1
-                    count = counter.value
+                    with counter.get_lock():
+                        counter.value += 1
+                        count = counter.value
 
-                try:
-                    # 만든 암호를 가지고 실제 압축을 풀어보는 시도
-                    zf.extractall(pwd=password.encode())
-                    duration = time.time() - start_time
+                    try:
+                        zf.extractall(pwd=password.encode())
+                        duration = time.time() - start_time
 
-                    # 성공하면 정보 출력
-                    print(f"\n[+] 암호 해제 성공!")
-                    print(f"[+] 암호: {password}")
-                    print(f"[+] 시작 시간: {datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')}")
-                    print(f"[+] 시도 횟수: {count}")
-                    print(f"[+] 소요 시간: {duration:.2f}초")
+                        print(f"\n[+] 암호 해제 성공!")
+                        print(f"[+] 암호: {password}")
+                        print(f"[+] 시작 시간: {datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')}")
+                        print(f"[+] 시도 횟수: {count}")
+                        print(f"[+] 소요 시간: {duration:.2f}초")
 
-                    # 암호를 파일에 저장
-                    with open(OUTPUT_FILE, "w") as f:
-                        f.write(password)
+                        with open(OUTPUT_FILE, "w") as f:
+                            f.write(password)
+                            f.flush()
+                            time.sleep(0.1)  # 디스크 기록 시간 확보
 
-                    # 모든 프로세스를 즉시 종료 (다른 프로세스의 추가 작업 방지)
-                    os._exit(0)
-
-                except:
-                    # 10,000번마다 진행 상황을 로그로 찍어줌.
-                    if count % 10000 == 0:
-                        print(f"[{start_char}] {count}회 시도 중... 경과 시간: {time.time() - start_time:.2f}초")
+                        os._exit(0)
+                    except:
+                        if count % 1000 == 0:
+                            print(f"[{prefix+start_char}] {count}회 시도 중... 경과 시간: {time.time() - start_time:.2f}초")
 
     except Exception as e:
-        # 오류가 생겼을 때 안내
-        print(f"[!] 오류 발생 in {start_char}: {e}")
+        print(f"[!] 오류 발생: {e}")
 
-
-# 멀티코어로 동시에 암호를 해제하는 메인 함수.
-def unlock_zip():
-    # 시작 메시지 출력
-    print(f"[*] 멀티코어 암호 해독 시작 (CPU 코어 수: {PROCESS_COUNT})")
-    print(f"[*] 시작 시간: {datetime.fromtimestamp(start_time).strftime('%Y-%m-%d %H:%M:%S')}")
-
-    # 각 CPU 코어에 시작 문자를 분배해서 병렬로 작업
-    #  a부터 시작, b부터 시작 이런식으로 나눠줌
-    start_chars = CHARSET[:PROCESS_COUNT]
+def run_crack(prefix):
+    """
+    prefix를 기반으로 프로세스를 분할 실행
+    """
+    print(f"[*] 시작 단계: prefix='{prefix}'")
+    start_chars = CHARSET[:PROCESS_COUNT]  # 코어 수만큼 시작 문자 분배
     processes = []
 
-    # 프로세스를 생성하고 실행
-    for ch in start_chars:
-        p = multiprocessing.Process(target=try_passwords, args=(ch, attempt_counter))
+    for i in range(PROCESS_COUNT):
+        chs = CHARSET[i::PROCESS_COUNT]  # 문자 집합을 분산 처리
+        p = multiprocessing.Process(target=try_passwords, args=(chs, prefix, attempt_counter))
         p.start()
         processes.append(p)
 
-    # 모든 프로세스의 작업이 끝날 때까지 기다림
     for p in processes:
         p.join()
 
-# 이 스크립트를 직접 실행할 때 메인 함수를 실행
+def unlock_zip():
+    """
+    'mars'로 시작하는 암호 먼저 시도하고, 실패 시 전체 6자리 암호 시도
+    """
+    global start_time
+    print(f"[*] 멀티코어 암호 해독 시작 (CPU 코어 수: {PROCESS_COUNT})")
+
+    # 1단계: marsxx 형식 우선 시도
+    start_time = time.time()
+    run_crack("mars")
+
+    # password.txt가 생성되지 않았으면 전체 탐색 시도
+    if not os.path.exists(OUTPUT_FILE):
+        print("[*] marsxx 실패, 전체 탐색 시도 중...")
+        attempt_counter.value = 0  # 카운터 초기화
+        start_time = time.time()
+        run_crack("")
+
 if __name__ == "__main__":
     unlock_zip()
