@@ -48,7 +48,14 @@ def list_records_by_date(start_date, end_date):
 
 # 3. STT 실행 함수: 음성을 텍스트로 변환하여 CSV 저장
 def transcribe_audio_to_csv(wav_path):
-    print(f"[🔍] STT 처리 중: {wav_path}")
+    from pydub import AudioSegment
+
+    # ✅ ffmpeg / ffprobe 위치 수동 지정
+    AudioSegment.converter = r"C:\ffmpeg\ffmpeg-7.1.1-essentials_build\bin\ffmpeg.exe"
+    AudioSegment.ffprobe   = r"C:\ffmpeg\ffmpeg-7.1.1-essentials_build\bin\ffprobe.exe"
+
+
+    print(f" STT 처리 중: {wav_path}")
     recognizer = sr.Recognizer()
 
     audio = AudioSegment.from_wav(wav_path)  # wav 파일 로드
@@ -80,6 +87,8 @@ def transcribe_audio_to_csv(wav_path):
                     print(f" 오류 발생: {e}")
                     break
 
+    
+    
     os.remove("temp.wav")
     print(f" CSV 저장 완료: {csv_path}")
 
