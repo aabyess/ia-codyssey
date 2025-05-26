@@ -2,7 +2,7 @@
 def caesar_cipher_decode(target_text):
     decoded_results = []  # 복호화된 결과를 저장할 리스트 생성
 
-    # 시프트 값(0~25)만큼 반복하며 모든 가능한 복호화 시도
+    # 시프트 값(0~25)만큼 반복하며 모든 가능한 복호화 시도, 알파벳이 26글자이므로
     for shift in range(26):
         decoded_text = ''  # 현재 시프트 값에 대한 복호화 결과를 저장할 문자열
         
@@ -10,7 +10,7 @@ def caesar_cipher_decode(target_text):
         for char in target_text:
             if char.isalpha():  # 알파벳인 경우에만 처리
                 start = ord('A') if char.isupper() else ord('a')  # 대소문자 구분하여 시작점 설정
-                # 시프트 연산 후 알파벳 범위(26글자) 내로 유지
+                # 복호화 공식 적용
                 decoded_char = chr(start + (ord(char) - start - shift) % 26)
                 decoded_text += decoded_char  # 복호화된 문자 추가
             else:
