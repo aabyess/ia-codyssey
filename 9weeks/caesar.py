@@ -72,6 +72,3 @@ if shift is not None:
 else:
     # 암호를 찾지 못한 경우 메시지 출력
     print('적합한 암호를 찾지 못했습니다.')
-
-
-#0523
