@@ -22,6 +22,7 @@ def record_voice(duration=10, sample_rate=44100):
     audio_data = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1)
     sd.wait()  # 녹음이 끝날 때까지 대기
 
+    # 파일 이름 형식: '년월일-시간분초.wav'
     filename = datetime.now().strftime("%Y%m%d-%H%M%S") + ".wav"
     filepath = os.path.join(RECORD_FOLDER, filename)
 
