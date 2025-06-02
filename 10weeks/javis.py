@@ -16,7 +16,7 @@ def record_voice(duration=10, sample_rate=44100):
     :param duration: 녹음 시간 (초 단위)
     :param sample_rate: 오디오 샘플링 주기 (Hz, 기본 44.1kHz)
     """
-    print(f"[🎙️] {duration}초간 녹음 시작...")
+    print(f"{duration}초간 녹음 시작...")
     
     # duration 초 동안 녹음 데이터를 수집 (모노 채널)
     audio_data = sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1)
@@ -29,7 +29,7 @@ def record_voice(duration=10, sample_rate=44100):
     # 녹음된 데이터를 .wav 파일로 저장
     write(filepath, sample_rate, audio_data)
 
-    print(f"[✅] 녹음 완료! 저장 위치: {filepath}")
+    print(f"녹음 완료! 저장 위치: {filepath}")
     return filepath  # 파일 경로 반환
 
 # 날짜 범위에 따른 파일 조회 기능 (보너스 과제)
@@ -39,7 +39,7 @@ def list_records_by_date(start_date, end_date):
     :param start_date: 시작 날짜 (형식: 'YYYYMMDD')
     :param end_date: 종료 날짜 (형식: 'YYYYMMDD')
     """
-    print(f"[📁] 녹음 파일 검색: {start_date} ~ {end_date}")
+    print(f"녹음 파일 검색: {start_date} ~ {end_date}")
     
     # 입력된 문자열을 datetime 객체로 변환
     start_dt = datetime.strptime(start_date, "%Y%m%d")
@@ -59,11 +59,11 @@ def list_records_by_date(start_date, end_date):
 
     # 결과 출력
     if matched_files:
-        print("[📄] 해당 기간의 녹음 파일 목록:")
+        print(" 해당 기간의 녹음 파일 목록:")
         for f in sorted(matched_files):
             print(f" - {f}")
     else:
-        print("[⚠️] 해당 기간에 해당하는 녹음 파일이 없습니다.")
+        print("해당 기간에 해당하는 녹음 파일이 없습니다.")
 
 # 실행 루틴: 메뉴 기반 동작
 if __name__ == "__main__":
@@ -81,8 +81,8 @@ if __name__ == "__main__":
             except:
                 print("[오류] 숫자로 입력해 주세요.")
         elif choice == "2":
-            s = input("시작 날짜 (예: 20240501): ")
-            e = input("종료 날짜 (예: 20240531): ")
+            s = input("시작 날짜 (예: 20250501): ")
+            e = input("종료 날짜 (예: 20250531): ")
             list_records_by_date(s, e)
         elif choice == "0":
             break
