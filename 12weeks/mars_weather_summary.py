@@ -45,7 +45,7 @@ def insert_data_from_csv(db, csv_file):
             )
             mars_date = row['mars_date']  # 날짜 그대로 사용
             temp = int(float(row['temp']))  # 소수 → 정수 변환
-            storm = int(row['stom'])  # CSV 오타(stom)를 storm으로 처리
+            storm = int(row['stom'])  # CSV 오타(stom)를 storm으로 수정
             db.execute(insert_query, (mars_date, temp, storm))
 
 # 전체 실행 흐름을 제어하는 메인 함수
