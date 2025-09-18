@@ -21,7 +21,7 @@ class ChatServer:
     def start(self) -> None:
         """서버 시작."""
         self.server_socket.bind((self.host, self.port))
-        self.server_socket.listen() # bind/listen으로 서버 대기 진입.
+        self.server_socket.listen() # bind/listen으로 서버 대기 진입. 
        
         self.running = True
         print(f'[INFO] 채팅서버 시작! {self.host}:{self.port}')
