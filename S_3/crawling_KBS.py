@@ -64,7 +64,7 @@ def fetch_html(url: str, *, timeout: int = 10) -> str:
         resp.encoding = resp.apparent_encoding
     return resp.text
 
-# 1) KBS 헤드라인(JSON API)
+# KBS 헤드라인(JSON API)
 def fetch_kbs_headlines(max_items: int = 10) -> List[Dict[str, str]]:
     """
     KBS JSON API에서 헤드라인 기사 목록을 가져와
@@ -113,9 +113,8 @@ def print_kbs_headlines(items: List[Dict[str, str]]) -> None:
             print(f'   - {url}')
 
 
-# -----------------------------
-# 2) 보너스: 네이버 금융 지수
-# -----------------------------
+
+# 보너스: 네이버 금융 지수
 def parse_naver_kospi_kosdaq(html: str) -> Tuple[Optional[str], Optional[str]]:
     """
     네이버 금융(시세) 페이지에서 KOSPI, KOSDAQ 지수를 파싱한다.
