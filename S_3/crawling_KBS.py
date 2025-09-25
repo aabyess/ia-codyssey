@@ -1,32 +1,18 @@
-# crawling_KBS.py
-# -*- coding: utf-8 -*-
-"""
-KBS 헤드라인 뉴스 크롤러 (+ 보너스: 네이버 금융 지수)
-- 표준 라이브러리 + requests + BeautifulSoup만 사용
-- PEP 8 코딩 스타일 준수
-- 문자열은 기본적으로 작은따옴표(' ') 사용
-
-기능 개요
-1) KBS 메인 페이지에서 '헤드라인' 뉴스 타이틀 수집
-   - 섹션 제목에 '헤드라인'이 포함된 영역 우선 탐색
-   - 실패 시 문서 전체를 훑으며 폭넓은 링크 패턴으로 폴백
-   - 메뉴/배너류 텍스트 필터링
-2) 수집 결과를 리스트(List[str])로 화면 출력
-3) 보너스: 네이버 금융에서 KOSPI, KOSDAQ, USD/KRW 간단 수집
-"""
-
 from __future__ import annotations
 
+from typing import Dict, List, Optional, Tuple, Union
 import re
 import sys
-from typing import Iterable, List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup
-from bs4.element import Tag
 
+# 설정값: 필요한 경우 여기만 바꾸면 됨
 KBS_BASE = 'https://news.kbs.co.kr'
-KBS_MAIN = 'https://news.kbs.co.kr/'
+# 네가 Network 탭에서 확인한 JSON 주소를 넣으면 됨(예시 값)
+API_URL = 'https://news.kbs.co.kr/expose/329.json?d=202509251726'
+
+# 보너스(네이버 금융)
 NAVER_SISE = 'https://finance.naver.com/sise/'
 NAVER_FX = 'https://finance.naver.com/marketindex/'
 
@@ -35,150 +21,107 @@ HEADERS = {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
         'AppleWebKit/537.36 (KHTML, like Gecko) '
         'Chrome/120.0.0.0 Safari/537.36'
-    )
+    ),
+    'Referer': 'https://news.kbs.co.kr/',
 }
 
-# 기사로 보기 어려운 잡텍스트 블록리스트
-BLOCK_WORDS = {'전체보기', '더보기', '영상으로 보기', '바로가기', 'LIVE', 'KBS 뉴스', '뉴스홈'}
+"""
+KBS 헤드라인 크롤러 (+ 보너스: 네이버 금융 지수)
 
+구성
+1) KBS 메인 JSON API(예: /expose/329.json)를 직접 호출해 헤드라인 제목/URL 수집
+2) 수집 결과를 번호와 함께 출력(제목 + 절대 URL)
+3) 보너스: 네이버 금융에서 KOSPI, KOSDAQ, USD/KRW 환율 간단 수집 및 출력
 
-# -----------------------
+주의
+- KBS 메인은 JS로 렌더되는 경우가 많아, 초기 HTML로는 기사를 못 얻을 수 있음.
+  Network 탭에서 확인한 JSON 엔드포인트(API_URL)를 사용한다.
+- JSON 구조는 상황에 따라 '최상위 리스트' 또는 {'items':[...]} 두 형태를 모두 대응.
+"""
+
 # 공통 유틸
-# -----------------------
+def to_abs_url(href: str) -> str:
+    """상대 경로를 절대 경로로 변환한다."""
+    if not href:
+        return ''
+    if href.startswith('http'):
+        return href
+    if href.startswith('/'):
+        return f'{KBS_BASE}{href}'
+    return f'{KBS_BASE}/{href.lstrip("/")}'
+
+
+def clean_spaces(text: str) -> str:
+    """여러 공백/개행을 하나로 줄이고 트림한다."""
+    return re.sub(r'\s+', ' ', text or '').strip()
+
+
 def fetch_html(url: str, *, timeout: int = 10) -> str:
-    """URL의 HTML을 요청해 문자열로 반환한다."""
+    """URL에서 HTML 텍스트를 반환한다."""
     resp = requests.get(url, headers=HEADERS, timeout=timeout)
     resp.raise_for_status()
     if not resp.encoding or resp.encoding.lower() == 'iso-8859-1':
         resp.encoding = resp.apparent_encoding
     return resp.text
 
-
-def to_abs_url(href: str) -> str:
-    """상대경로를 절대경로로 변환한다."""
-    if href.startswith('http'):
-        return href
-    if href.startswith('/'):
-        return f'{KBS_BASE}{href}'
-    return f'{KBS_MAIN.rstrip("/")}/{href}'
-
-
-def clean_title(text: str) -> str:
-    """제목 문자열에서 공백/개행을 정리한다."""
-    return re.sub(r'\s+', ' ', text).strip()
-
-
-def is_bad_title(title: str) -> bool:
-    """메뉴/내비게이션 등 기사로 보기 어려운 제목을 걸러낸다."""
-    if not title:
-        return True
-    if title in BLOCK_WORDS:
-        return True
-    if len(title) < 6:
-        return True
-    return False
-
-
-# -----------------------
-# KBS 헤드라인 파싱
-# -----------------------
-def is_news_link(a: Tag) -> bool:
-    """KBS 뉴스 본문 링크로 '추정'되는 패턴을 폭넓게 허용한다."""
-    href = a.get('href', '')
-    if not href:
-        return False
-
-    # 대표 패턴을 넓게 커버:
-    # - /news/view.do?..., /news/.../view/..., /news/.../read/..., /news/.../v/...
-    # - /news/.../<숫자> (아이디형)
-    # - 절대 URL일 경우 news.kbs.co.kr만 허용
-    pattern = re.compile(
-        r'^(?:https?://news\.kbs\.co\.kr)?/?news/(?:.+?(?:view|read|v)\b|.+?/\d{6,})',
-        re.IGNORECASE
-    )
-    return bool(pattern.search(href))
-
-
-def find_headline_section(soup: BeautifulSoup) -> Optional[Tag]:
+# 1) KBS 헤드라인(JSON API)
+def fetch_kbs_headlines(max_items: int = 10) -> List[Dict[str, str]]:
     """
-    문서에서 '헤드라인' 섹션 컨테이너를 찾아 반환한다.
-    - h2/h3/aria-label 등에 '헤드라인' 텍스트가 포함된 영역 우선
+    KBS JSON API에서 헤드라인 기사 목록을 가져와
+    [{'title': str, 'url': str(절대경로)} ...] 형태로 반환한다.
     """
-    for heading in soup.find_all(['h2', 'h3']):
-        if heading.get_text(strip=True).find('헤드라인') != -1:
-            return heading.parent
+    resp = requests.get(API_URL, headers=HEADERS, timeout=10)
+    resp.raise_for_status()
 
-    for sec in soup.find_all(attrs={'aria-label': True}):
-        label = str(sec.get('aria-label', ''))
-        if '헤드라인' in label:
-            return sec
+    data: Union[List[dict], Dict[str, object]] = resp.json()
 
-    return None
+    # JSON 최상위가 리스트인 경우와 dict인 경우 모두 대응
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        items = data.get('items', [])  # {'items':[...]} 형태
+        if not isinstance(items, list):
+            items = []
+    else:
+        items = []
 
-
-def extract_links_from_container(container: Tag, limit: int = 20) -> List[Tuple[str, str]]:
-    """
-    컨테이너(또는 문서 전체)에서 기사 링크를 추출한다.
-    - 폭넓은 링크 패턴을 사용
-    - 블록리스트/짧은 텍스트 제거
-    """
-    pairs: List[Tuple[str, str]] = []
-    seen: set = set()
-
-    for a in container.find_all('a', href=True):
-        if not is_news_link(a):
+    results: List[Dict[str, str]] = []
+    for it in items:
+        if not isinstance(it, dict):
             continue
-        title = clean_title(a.get_text(' ', strip=True))
-        if is_bad_title(title):
+        title = clean_spaces(str(it.get('title', '')))
+        url = to_abs_url(str(it.get('url', '')))
+        if not title:
             continue
-        href = to_abs_url(a['href'])
-        key = (title, href)
-        if key in seen:
-            continue
-        pairs.append((title, href))
-        seen.add(key)
-        if len(pairs) >= limit:
+        results.append({'title': title, 'url': url})
+        if len(results) >= max_items:
             break
-
-    return pairs
-
-
-def parse_kbs_headlines(html: str, *, max_items: int = 10) -> List[str]:
-    """
-    KBS 메인 HTML에서 헤드라인 뉴스 타이틀 목록을 추출해 List[str]로 반환한다.
-    - 섹션 매칭 실패 시 문서 전체에서 폴백
-    """
-    soup = BeautifulSoup(html, 'html.parser')
-
-    container = find_headline_section(soup)
-    items: List[Tuple[str, str]] = []
-
-    if container is not None:
-        items = extract_links_from_container(container, limit=max_items * 3)
-
-    if not items:
-        items = extract_links_from_container(soup, limit=max_items * 6)
-
-    titles_only = [t for t, _ in items][:max_items]
-    return titles_only
+    return results
 
 
-def print_as_list(items: Iterable[str]) -> None:
-    """리스트 객체를 번호와 함께 화면에 출력한다."""
-    items = list(items)
+def print_kbs_headlines(items: List[Dict[str, str]]) -> None:
+    """KBS 헤드라인을 번호와 함께 출력한다(제목 + URL)."""
     print('[KBS 헤드라인]')
     if not items:
         print('- 수집된 항목이 없습니다.')
         return
-    for idx, title in enumerate(items, start=1):
+    for idx, it in enumerate(items, 1):
+        title = it.get('title', '')
+        url = it.get('url', '')
         print(f'{idx}. {title}')
+        if url:
+            print(f'   - {url}')
 
 
-# -----------------------
-# 보너스: 간단한 금융 지수
-# -----------------------
+# -----------------------------
+# 2) 보너스: 네이버 금융 지수
+# -----------------------------
 def parse_naver_kospi_kosdaq(html: str) -> Tuple[Optional[str], Optional[str]]:
-    """네이버 금융(시세) 페이지에서 KOSPI, KOSDAQ 지수를 파싱한다."""
+    """
+    네이버 금융(시세) 페이지에서 KOSPI, KOSDAQ 지수를 파싱한다.
+    - 대표 ID(#KOSPI_now, #KOSDAQ_now) 우선
+    - 실패 시 간단 폴백
+    """
     soup = BeautifulSoup(html, 'html.parser')
 
     kospi = None
@@ -186,27 +129,28 @@ def parse_naver_kospi_kosdaq(html: str) -> Tuple[Optional[str], Optional[str]]:
 
     node = soup.select_one('#KOSPI_now')
     if node:
-        kospi = clean_title(node.get_text())
+        kospi = clean_spaces(node.get_text())
 
     node = soup.select_one('#KOSDAQ_now')
     if node:
-        kosdaq = clean_title(node.get_text())
+        kosdaq = clean_spaces(node.get_text())
 
+    # 간단 폴백(신뢰도 낮음): 텍스트 근처에서 숫자 뽑기
     if kospi is None:
-        text = soup.find(string=re.compile(r'KOSPI', re.I))
-        if text and isinstance(text, str):
-            parent_text = getattr(text, 'parent', None)
-            parent_text = parent_text.get_text(' ', strip=True) if parent_text else text
-            m = re.search(r'([0-9]+(?:\.[0-9]+)?)', parent_text)
+        txt = soup.find(string=re.compile(r'KOSPI', re.I))
+        if txt:
+            near = getattr(txt, 'parent', None)
+            near_text = clean_spaces(near.get_text()) if near else str(txt)
+            m = re.search(r'([0-9]+(?:\.[0-9]+)?)', near_text)
             if m:
                 kospi = m.group(1)
 
     if kosdaq is None:
-        text = soup.find(string=re.compile(r'KOSDAQ', re.I))
-        if text and isinstance(text, str):
-            parent_text = getattr(text, 'parent', None)
-            parent_text = parent_text.get_text(' ', strip=True) if parent_text else text
-            m = re.search(r'([0-9]+(?:\.[0-9]+)?)', parent_text)
+        txt = soup.find(string=re.compile(r'KOSDAQ', re.I))
+        if txt:
+            near = getattr(txt, 'parent', None)
+            near_text = clean_spaces(near.get_text()) if near else str(txt)
+            m = re.search(r'([0-9]+(?:\.[0-9]+)?)', near_text)
             if m:
                 kosdaq = m.group(1)
 
@@ -214,27 +158,16 @@ def parse_naver_kospi_kosdaq(html: str) -> Tuple[Optional[str], Optional[str]]:
 
 
 def parse_naver_usdkrw(html: str) -> Optional[str]:
-    """네이버 금융(시장지표)에서 USD/KRW 환율 값을 파싱한다."""
+    """
+    네이버 금융(시장지표)에서 USD/KRW 환율 값을 파싱한다.
+    - '미국 USD' 행의 .value 값 우선
+    """
     soup = BeautifulSoup(html, 'html.parser')
-
-    usd_row = None
     for row in soup.select('#exchangeList li'):
         if '미국 USD' in row.get_text(' ', strip=True):
-            usd_row = row
-            break
-
-    if usd_row:
-        val = usd_row.select_one('.value')
-        if val:
-            return clean_title(val.get_text())
-
-    text = soup.find(string=re.compile(r'미국\s*USD'))
-    if text:
-        nearby = text.parent.get_text(' ', strip=True)
-        m = re.search(r'([0-9]+(?:\.[0-9]+)?)', nearby)
-        if m:
-            return m.group(1)
-
+            val = row.select_one('.value')
+            if val:
+                return clean_spaces(val.get_text())
     return None
 
 
@@ -260,21 +193,17 @@ def print_bonus_market() -> None:
     print(f'- USD/KRW : {usdkrw if usdkrw is not None else "N/A"}')
 
 
-# -----------------------
-# 실행부
-# -----------------------
 def main() -> None:
-    """엔트리 포인트: KBS 헤드라인 수집 및 출력 + 보너스 지수 출력."""
+    # 1) KBS 헤드라인 출력
     try:
-        html = fetch_html(KBS_MAIN)
+        headlines = fetch_kbs_headlines(max_items=10)
     except Exception as exc:
-        print('[오류] KBS 페이지 요청 실패:', exc)
-        sys.exit(1)
+        print('[KBS 헤드라인]')
+        print(f'- 수집 실패: {exc}')
+    else:
+        print_kbs_headlines(headlines)
 
-    titles = parse_kbs_headlines(html, max_items=10)
-    print_as_list(titles)
-
-    # 보너스 출력
+    # 2) 보너스(네이버 금융) 출력
     print_bonus_market()
 
 
