@@ -1,207 +1,192 @@
-# sendmail.py
+from __future__ import annotations
 import argparse
 import csv
 import getpass
 import mimetypes
 import os
-import re
-import socket
 import ssl
 import sys
-import time
 from email.message import EmailMessage
-from smtplib import (
-    SMTP, SMTPAuthenticationError, SMTPConnectError,
-    SMTPException, SMTPServerDisconnected
-)
+from pathlib import Path
+from smtplib import SMTP, SMTPAuthenticationError
+from typing import List, Tuple
 
-# ───────────────── SMTP 기본값 ─────────────────
-SMTP_HOST = 'smtp.gmail.com'
-SMTP_PORT = 587
+# =========================
+# SMTP 서비스 정보
+# =========================
+SMTP_PRESETS = {
+    'gmail': ('smtp.gmail.com', 587, 'Gmail STARTTLS (앱 비밀번호 사용 권장)'),
+    'naver': ('smtp.naver.com', 587, 'Naver STARTTLS (앱 비밀번호 사용 권장)'),
+}
 
-# 이메일 형식 검사용 (간단 버전)
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-
-
-# ───────────────── CSV 로더 ─────────────────
-def read_targets_from_csv(path: str) -> list[dict]:
-    """CSV(이름,이메일) → [{'name':..., 'email':...}, ...]"""
-    targets: list[dict] = []
-    with open(path, newline='', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
-        if not reader.fieldnames:
-            raise ValueError("CSV 헤더가 없습니다. 첫 줄에 '이름,이메일'이 있어야 합니다.")
-        # 헤더 유연 대응
-        name_key, email_key = None, None
-        headers = [h.strip() for h in reader.fieldnames]
-        for h in headers:
-            low = h.lower()
-            if name_key is None and low in ('이름', 'name'):
-                name_key = h
-            if email_key is None and low in ('이메일', 'email', 'e-mail'):
-                email_key = h
-        if not name_key or not email_key:
-            raise ValueError("CSV 헤더에 '이름'과 '이메일' 열이 필요합니다.")
-        # 행 로드
-        for row in reader:
-            name = (row.get(name_key) or '').strip()
-            email = (row.get(email_key) or '').strip()
-            if email and EMAIL_RE.match(email):
-                targets.append({'name': name, 'email': email})
-    if not targets:
-        raise ValueError("CSV에서 유효한 수신자를 찾지 못했습니다.")
-    return targets
+DEFAULT_SENDER = 'a00411@naver.com'     # ✅ 네 이메일로 기본값 설정
+DEFAULT_CSV = 'mail_target_list.csv'    # 같은 폴더에 둘 것
 
 
-# ───────────────── 본문/메시지 빌더 ─────────────────
-def load_html(path: str | None) -> str | None:
-    if not path:
-        return None
-    with open(path, 'r', encoding='utf-8') as f:
-        return f.read()
+# =========================
+# CSV 읽기
+# =========================
+def read_recipients(csv_path: str) -> List[Tuple[str, str]]:
+    """CSV 파일에서 (이름, 이메일) 목록을 읽어 리스트로 반환"""
+    path = Path(csv_path)
+    if not path.exists():
+        raise FileNotFoundError(f'CSV 파일을 찾을 수 없습니다: {csv_path}')
 
-def build_message(
-    sender: str,
-    to_list: list[str],
-    subject: str,
-    text_body: str | None,
-    html_body: str | None,
-    attachments: list[str] | None
-) -> EmailMessage:
-    """멀티파트(텍스트+HTML) + 첨부파일"""
+    recipients: List[Tuple[str, str]] = []
+    with path.open('r', encoding='utf-8-sig', newline='') as f:
+        reader = csv.reader(f)
+        rows = list(reader)
+
+    if not rows:
+        return recipients
+
+    # 첫 줄을 헤더로 간주
+    data_rows = rows[1:] if len(rows) > 1 else []
+
+    for idx, row in enumerate(data_rows, start=2):
+        if len(row) < 2:
+            continue
+        name = row[0].strip()
+        email = row[1].strip()
+        if email:
+            recipients.append((name, email))
+    return recipients
+
+
+# =========================
+# 메일 메시지 작성
+# =========================
+def build_message(sender: str, to_list: List[str], subject: str,
+                  text_body: str | None, html_body: str | None) -> EmailMessage:
+    """HTML 및 텍스트 본문을 포함한 EmailMessage 생성"""
     msg = EmailMessage()
     msg['From'] = sender
     msg['To'] = ', '.join(to_list)
     msg['Subject'] = subject
 
-    fallback = text_body or "This email contains HTML content. Please use an HTML-capable viewer."
-    if html_body:
-        msg.set_content(fallback)                       # text/plain
-        msg.add_alternative(html_body, subtype='html')  # text/html
+    if text_body:
+        msg.set_content(text_body)
     else:
-        msg.set_content(fallback)
+        msg.set_content('This email contains HTML content.')
 
-    if attachments:
-        for path in attachments:
-            if not os.path.isfile(path):
-                raise FileNotFoundError(f"첨부 파일을 찾을 수 없습니다: {path}")
-            ctype, encoding = mimetypes.guess_type(path)
-            if ctype is None or encoding is not None:
-                ctype = 'application/octet-stream'
-            maintype, subtype = ctype.split('/', 1)
-            with open(path, 'rb') as f:
-                data = f.read()
-            filename = os.path.basename(path)
-            msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+    if html_body:
+        msg.add_alternative(html_body, subtype='html')
 
     return msg
 
 
-# ───────────────── 전송기 ─────────────────
-def send_message(sender: str, app_password: str, msg: EmailMessage) -> None:
-    """단일 메시지 전송"""
+# =========================
+# SMTP 연결
+# =========================
+def open_smtp(service: str, sender: str) -> SMTP:
+    """SMTP 서버 연결 및 로그인"""
+    if service not in SMTP_PRESETS:
+        raise ValueError('지원되지 않는 서비스입니다. gmail 또는 naver 중 선택하세요.')
+
+    host, port, note = SMTP_PRESETS[service]
+    print(f'[*] SMTP 연결 중... ({host}:{port}) - {note}')
+    password = getpass.getpass(f'{sender} 계정의 앱 비밀번호를 입력하세요: ')
+
     context = ssl.create_default_context()
+    server = SMTP(host, port, timeout=30)
+    server.ehlo()
+    server.starttls(context=context)
+    server.ehlo()
     try:
-        with SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
-            server.ehlo()
-            server.starttls(context=context)
-            server.ehlo()
-            server.login(sender, app_password)
-            server.send_message(msg)
+        server.login(sender, password)
     except SMTPAuthenticationError:
-        raise SMTPAuthenticationError(535, '인증 실패: 앱 비밀번호(16자리) 또는 2단계 인증을 확인하세요.')
-    except SMTPConnectError:
-        raise ConnectionError('SMTP 서버 연결 실패: 호스트/포트 또는 네트워크 상태를 확인하세요.')
-    except SMTPServerDisconnected:
-        raise ConnectionError('SMTP 서버 연결이 예기치 않게 종료되었습니다.')
-    except (socket.timeout, socket.gaierror) as exc:
-        raise ConnectionError(f'네트워크 오류: {exc}') from exc
-    except SMTPException as exc:
-        raise RuntimeError(f'SMTP 오류: {exc}') from exc
+        print('[ERROR] 로그인 실패! 비밀번호(또는 앱 비밀번호)를 확인하세요.')
+        server.quit()
+        sys.exit(1)
+
+    print('[OK] SMTP 로그인 성공')
+    return server
 
 
-# ───────────────── CLI 옵션 ─────────────────
+# =========================
+# 발송 모드
+# =========================
+def send_bulk(server: SMTP, sender: str, recipients: List[Tuple[str, str]],
+              subject: str, text_body: str | None, html_body: str | None) -> None:
+    """bulk 모드: 여러 명을 To에 열거"""
+    to_list = [email for _, email in recipients]
+    subj = subject.replace('{name}', '')
+    html = (html_body or '').replace('{name}', '')
+    msg = build_message(sender, to_list, subj, text_body, html)
+    server.send_message(msg)
+    print(f'[OK] bulk 발송 완료 ({len(to_list)}명)')
+
+
+def send_single(server: SMTP, sender: str, recipients: List[Tuple[str, str]],
+                subject: str, text_body: str | None, html_body: str | None) -> None:
+    """single 모드: 개인별 메일 발송"""
+    for name, email in recipients:
+        subj = subject.replace('{name}', name)
+        html = html_body.replace('{name}', name) if html_body else None
+        msg = build_message(sender, [email], subj, text_body, html)
+        server.send_message(msg)
+        print(f'[OK] {name} <{email}> 메일 전송 완료')
+    print(f'[OK] 총 {len(recipients)}명에게 발송 완료')
+
+
+# =========================
+# CLI 인자
+# =========================
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description='Gmail SMTP로 HTML 메일 보내기 (CSV 명단 지원)')
-    p.add_argument('--sender', required=True, help='보내는 사람 이메일 (예: you@gmail.com)')
-    # 대상 지정: CSV가 있으면 CSV 우선, 없으면 --to 사용
-    p.add_argument('--targets-csv', default='mail_target_list.csv', help='수신자 CSV 경로 (기본: mail_target_list.csv)')
-    p.add_argument('--to', nargs='+', help='받는 사람 이메일(여러 명 가능). CSV 없을 때 사용')
-    p.add_argument('--subject', required=True, help='메일 제목')
-    p.add_argument('--body', help='텍스트 대체 본문(HTML이 안 보이는 경우용)')
-    p.add_argument('--html', help='HTML 본문 문자열 직접 입력')
-    p.add_argument('--html-file', help='HTML 본문 파일 경로 (예: mars_message.html)')
-    p.add_argument('--attach', nargs='*', default=None, help='첨부 파일 경로들 (0개 이상)')
-    p.add_argument('--mode', choices=['single', 'bulk'], default='single', help='single=개별 발송(추천), bulk=한 통에 다수')
-    p.add_argument('--sleep', type=float, default=0.8, help='single 모드에서 발송 간 대기(초)')
-    return p.parse_args()
+    parser = argparse.ArgumentParser(description='CSV 목록을 읽어 HTML 메일을 발송합니다.')
+    parser.add_argument('--service', choices=['gmail', 'naver'], default='naver', help='SMTP 서비스 선택')
+    parser.add_argument('--sender', default=DEFAULT_SENDER, help='보내는 사람 이메일 주소')
+    parser.add_argument('--subject', required=True, help='메일 제목 (예: "안내: {name}님")')
+    parser.add_argument('--body', help='텍스트 본문')
+    parser.add_argument('--html', help='HTML 본문 문자열')
+    parser.add_argument('--html-file', help='HTML 파일 경로')
+    parser.add_argument('--csv', default=DEFAULT_CSV, help='수신자 CSV 파일 (기본: mail_target_list.csv)')
+    parser.add_argument('--mode', choices=['bulk', 'single'], default='single',
+                        help='bulk: 한 통 / single: 개인별 (기본)')
+    return parser.parse_args()
 
 
-# ───────────────── 메인 ─────────────────
-def main():
+# =========================
+# 메인 함수
+# =========================
+def main() -> None:
     args = parse_args()
 
+    # CSV 읽기
+    try:
+        recipients = read_recipients(args.csv)
+    except FileNotFoundError as e:
+        print(f'[ERROR] {e}')
+        sys.exit(1)
+
+    if not recipients:
+        print('[WARN] CSV 파일에 유효한 수신자가 없습니다.')
+        sys.exit(1)
+
     # 본문 준비
-    text_body = args.body or "HTML 메일입니다. HTML이 보이지 않으면 이 문장을 확인해 주세요."
-    html_body = args.html or load_html(args.html_file)
-
-    # 앱 비밀번호
-    app_pw = getpass.getpass('Gmail 앱 비밀번호(16자리): ').strip()
-    if len(app_pw.replace(' ', '')) < 16:
-        print('오류: 앱 비밀번호가 올바르지 않습니다. 16자리 앱 비밀번호를 사용하세요.', file=sys.stderr)
-        sys.exit(1)
-
-    # 대상 수신자
-    targets: list[dict]
-    if args.targets_csv and os.path.exists(args.targets_csv):
-        targets = read_targets_from_csv(args.targets_csv)
-    elif args.to:
-        # 이름 없이 이메일만
-        cleaned = [t for t in args.to if EMAIL_RE.match(t)]
-        if not cleaned:
-            print('오류: 유효한 수신자 이메일이 없습니다.', file=sys.stderr)
+    html_body = None
+    if args.html_file:
+        path = Path(args.html_file)
+        if not path.exists():
+            print(f'[ERROR] HTML 파일을 찾을 수 없습니다: {args.html_file}')
             sys.exit(1)
-        targets = [{'name': '', 'email': t} for t in cleaned]
-    else:
-        print("오류: --targets-csv 파일이 없고 --to 옵션도 없습니다.", file=sys.stderr)
-        sys.exit(1)
+        html_body = path.read_text(encoding='utf-8')
+    elif args.html:
+        html_body = args.html
 
-    to_emails = [t['email'] for t in targets]
+    text_body = args.body or None
+
+    # SMTP 연결
+    server = open_smtp(args.service, args.sender)
 
     try:
         if args.mode == 'bulk':
-            # 한 통에 여러 명
-            msg = build_message(
-                sender=args.sender,
-                to_list=to_emails,
-                subject=args.subject,
-                text_body=text_body,
-                html_body=html_body,
-                attachments=args.attach
-            )
-            send_message(args.sender, app_pw, msg)
-            print(f'✅ BULK 전송 완료 ({len(to_emails)}명)')
+            send_bulk(server, args.sender, recipients, args.subject, text_body, html_body)
         else:
-            # 개별 발송
-            sent = 0
-            for t in targets:
-                msg = build_message(
-                    sender=args.sender,
-                    to_list=[t['email']],
-                    subject=args.subject,
-                    text_body=text_body,
-                    html_body=html_body,
-                    attachments=args.attach
-                )
-                send_message(args.sender, app_pw, msg)
-                print(f"OK ▶ {t['email']}")
-                sent += 1
-                if args.sleep > 0:
-                    time.sleep(args.sleep)
-            print(f'✅ SINGLE 전송 완료 ({sent}명)')
-    except Exception as exc:
-        print(f'메일 전송 실패: {exc}', file=sys.stderr)
-        sys.exit(2)
+            send_single(server, args.sender, recipients, args.subject, text_body, html_body)
+    finally:
+        server.quit()
+        print('[*] SMTP 세션 종료')
 
 
 if __name__ == '__main__':
