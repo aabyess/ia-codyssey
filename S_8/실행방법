@@ -1,0 +1,15 @@
+# 1) 가상환경 (이미 있으면 생략)
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install fastapi uvicorn
+
+# 2) 서버 실행
+python -m uvicorn todo:app --reload
+# (또는 uvicorn todo:app --reload)
+
+
+# 4) CMD에서 확인하는 cURL 모음
+#(1) 추가 (POST) — 예시
+curl -X POST "http://127.0.0.1:8000/api/add_todo" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"title\":\"테스트 작업\",\"priority\":\"high\"}"
