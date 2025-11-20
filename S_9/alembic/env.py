@@ -5,27 +5,18 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# -------------------------------
-# ★ 여기 추가해야 하는 부분 ★
-#   우리의 Base(metadata)를 불러오기 위해 필요
-# -------------------------------
-import database
-import models  # noqa: F401  # 자동으로 테이블 로딩되게(삭제 금지)
 
-# -------------------------------
-# Alembic 기본 설정
-# -------------------------------
+import database
+import models  # noqa: F401 // F401 는 “사용 안 하는 import지만 오류 내지 마라”는 표시
+
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# -------------------------------
-# ★ 핵심: Alembic이 참조할 metadata 설정
-# -------------------------------
+
 target_metadata = database.Base.metadata
-# 기존에 있던 target_metadata = None 은 삭제 또는 덮어쓰기
-# -------------------------------
+
 
 
 def run_migrations_offline() -> None:

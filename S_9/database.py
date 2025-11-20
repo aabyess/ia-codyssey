@@ -1,5 +1,3 @@
-# 메모: SQLite + SQLAlchemy 세팅 (세션/엔진/베이스 정의)
-
 from __future__ import annotations
 
 from sqlalchemy import create_engine

@@ -1,18 +1,11 @@
 from __future__ import annotations
 from datetime import datetime
-from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Text,
-    DateTime,
-    ForeignKey,
-)
+from sqlalchemy import (Column, Integer, String, Text, DateTime, ForeignKey,)
 from sqlalchemy.orm import relationship
 from database import Base
 
 class Question(Base):
-    #게시판의 질문 테이블
+    # 게시판의 질문 테이블
     __tablename__ = 'question'
 
     id = Column(Integer, primary_key=True, index=True) # PK 지정 → 자동 증가되는 id 열이 됨.

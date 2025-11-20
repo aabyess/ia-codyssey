@@ -13,3 +13,23 @@ python -m uvicorn todo:app --reload
 curl -X POST "http://127.0.0.1:8000/api/add_todo" ^
   -H "Content-Type: application/json" ^
   -d "{\"title\":\"테스트 작업\",\"priority\":\"high\"}"
+ 
+# (2) 전체 조회 (GET)
+curl -X GET "http://127.0.0.1:8000/api/todos"
+
+# (3) 개별 조회 (GET)
+curl -X GET "http://127.0.0.1:8000/api/todos/1"
+
+# (4) 수정 (PUT, 모델 사용)
+# model.py의 TodoItem(fields=...)에 맞춰 본문은 {"fields": {...}}
+
+curl -X PUT "http://127.0.0.1:8000/api/todos/1" ^
+  -H "Content-Type: application/json" ^
+  -d "{\"fields\":{\"priority\":\"low\",\"done\":true}}"
+
+# (5) 삭제 (DELETE)
+curl -X DELETE "http://127.0.0.1:8000/api/todos/1"
+
+#  5) 보너스 과제: 초간단 클라이언트 (client.py)
+
+# 표준 라이브러리만 사용(urllib.request)해서 호출 테스트.
