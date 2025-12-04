@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>질문 등록</title>
+</head>
+<body>
+    <h1>질문 등록 페이지</h1>
+
+    <form id="questionForm">
+        <label>제목<br>
+            <input type="text" id="subject" required>
+        </label><br><br>
+
+        <label>내용<br>
+            <textarea id="content" required></textarea>
+        </label><br><br>
+
+        <button type="submit">등록하기</button>
+    </form>
+
+    <h3 id="result"></h3>
+
+    <script>
+        document.getElementById("questionForm").addEventListener("submit", async function (e) {
+            e.preventDefault();
+
+            const data = {
+                subject: document.getElementById("subject").value,
+                content: document.getElementById("content").value
+            };
+
+            const response = await fetch("http://127.0.0.1:8000/api/question/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            document.getElementById("result").innerText = "등록 완료: " + JSON.stringify(result);
+        });
+    </script>
+</body>
+</html>

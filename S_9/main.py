@@ -1,13 +1,26 @@
-from __future__ import annotations
+# main.py
+
+from fastapi import FastAPI
+
 from database import Base, engine
-import models  # noqa: F401  //F401 는 “사용 안 하는 import지만 오류 내지 마라”는 표시
+import models  # noqa: F401  # 모델 불러오기
+from fastapi.middleware.cors import CORSMiddleware
+from domain.question.question_router import router as question_router
+
+app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # 모든 출처 허용 (개발용)
+    allow_credentials=True,
+    allow_methods=["*"],          # 모든 HTTP 메소드 허용
+    allow_headers=["*"],          # 모든 헤더 허용
+)
 
 
-def init_db() -> None:
-    """메모: 필요시 직접 테이블 생성할 때 사용 (Alembic 없이)."""
-    Base.metadata.create_all(bind=engine)
+# 라우터 등록
+app.include_router(question_router)
 
 
-if __name__ == '__main__':
-    init_db()
-    print('테이블 생성 완료')
+@app.get("/")
+def root():
+    return {"message": "Mars Q&A API Running"}

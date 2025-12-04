@@ -1,27 +1,41 @@
-from __future__ import annotations
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from contextlib import contextmanager
 
-# SQLite 데이터베이스 URL
-SQLALCHEMY_DATABASE_URL = 'sqlite:///./mars.db' # DB 접속 주소(URL) 형식
+# SQLite DB 파일 이름
+SQLALCHEMY_DATABASE_URL = "sqlite:///./mars.db"
 
-# DB랑 실제로 연결해주는 애 (연결 파이프)
+# SQLite 엔진 생성
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, #아까 말한 SQLite 파일 경로
-    connect_args={'check_same_thread': False},
-    # SQLite 기본 설정은
-    # “이 연결(커넥션)을 만든 쓰레드에서만 써라” 라는 제한
-    # 근데 웹 서버(FastAPI, Uvicorn)는 요청마다 다른 쓰레드를 쓸 수 있음
-    # 그래서 이 제한을 풀어줘야 함 → False 로 꺼버림
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
 )
 
-# DB에 쿼리 날릴 때 쓰는 “세션 공장”
-SessionLocal = sessionmaker( # 세션을 만들어주는 공장 함수
-    autocommit=False, #자동으로 커밋하지 마라는 뜻.
-    autoflush=False, #자동으로 플러시하지 마라는 뜻.
-    bind=engine, #위에서 만든 엔진(연결 파이프)랑 연결
+# 세션팩토리
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
 )
 
-# 모든 ORM 모델이 상속받는 부모 클래스
+# ORM 모델이 상속받는 Base 클래스
 Base = declarative_base()
+
+
+# 🔥 과제 핵심: contextlib 기반 get_db()
+@contextmanager
+def get_db():
+    """
+    메모: DB 연결 후 자동 종료하는 contextmanager 기반 의존성 주입 함수
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# FastAPI에서는 Depends()로 사용하기 위해 래퍼 필요
+def get_db_dep():
+    with get_db() as db:
+        yield db
